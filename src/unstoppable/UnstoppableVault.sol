@@ -31,6 +31,7 @@ contract UnstoppableVault is IERC3156FlashLender, ReentrancyGuard, Owned, ERC462
 
     event FeeRecipientUpdated(address indexed newFeeRecipient);
 
+    // @notice _token is the underlaying, 
     constructor(ERC20 _token, address _owner, address _feeRecipient)
         ERC4626(_token, "Too Damn Valuable Token", "tDVT")
         Owned(_owner)
@@ -46,7 +47,6 @@ contract UnstoppableVault is IERC3156FlashLender, ReentrancyGuard, Owned, ERC462
         if (address(asset) != _token) {
             return 0;
         }
-
         return totalAssets();
     }
 
@@ -82,6 +82,14 @@ contract UnstoppableVault is IERC3156FlashLender, ReentrancyGuard, Owned, ERC462
         if (amount == 0) revert InvalidAmount(0); // fail early
         if (address(asset) != _token) revert UnsupportedCurrency(); // enforce ERC3156 requirement
         uint256 balanceBefore = totalAssets();
+        // @audit@notice totalAssets = underlaying balance in this | totalSupply=total amount of shares 
+        // This is evaluating a 1:1 relation btw assets  and shares. 
+        // So this should be convertToShares(balanceBefore) == balanceBefore 
+        // AKA the correspondant shares to the current underlaying holds should be the same as the current existant shases
+        // it should be convertToShares(totalAssets()) but since is 1:1 relation, devs assume is the same. 
+        // possible mitigation: store the current underlaying in deposit, and use it instead of balanceOf(this)
+        // by this way, the system is bulletproof the non-desired transfers.    
+        // @audit@possible-attack when tokens are directly transfered to this, no shares are minted, causing this conditional to be true and revert
         if (convertToShares(totalSupply) != balanceBefore) revert InvalidBalance(); // enforce ERC4626 requirement
 
         // transfer tokens out + execute callback on receiver
