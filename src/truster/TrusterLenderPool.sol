@@ -24,8 +24,11 @@ contract TrusterLenderPool is ReentrancyGuard {
     {
         uint256 balanceBefore = token.balanceOf(address(this));
 
-        token.transfer(borrower, amount);
-        target.functionCall(data);
+        token.transfer(borrower, amount); // @i amount can be 0  
+        // @audit approve then transfer -> but are 2 tx, needs to be done in 1
+        // If I call transfer is just one, but the below conditional revert will be triggered
+        // multicall? constructor? custom function on a contract?
+        target.functionCall(data);  
 
         if (token.balanceOf(address(this)) < balanceBefore) {
             revert RepayFailed();

