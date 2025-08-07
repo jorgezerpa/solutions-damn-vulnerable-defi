@@ -65,6 +65,7 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
 
     function withdraw(uint256 amount, address payable receiver) external {
         // Reduce deposits
+        // @audit this will revert if theres not enough balance
         deposits[_msgSender()] -= amount;
         totalDeposits -= amount;
 
@@ -85,7 +86,7 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
 
     function _msgSender() internal view override returns (address) {
         if (msg.sender == trustedForwarder && msg.data.length >= 20) {
-            return address(bytes20(msg.data[msg.data.length - 20:]));
+            return address(bytes20(msg.data[msg.data.length - 20:])); // @audit takes the most right bytes -> so the forwarder is passing the original caller address at the latest bytes of the msg.data
         } else {
             return super._msgSender();
         }

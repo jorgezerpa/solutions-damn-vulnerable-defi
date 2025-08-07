@@ -60,9 +60,13 @@ contract BasicForwarder is EIP712 {
         uint256 gasLeft;
         uint256 value = request.value; // in wei
         address target = request.target;
-        bytes memory payload = abi.encodePacked(request.data, request.from);
+        // @audit This will add the from address at the end of the string, and that is being used to take the msgSender for withdraw and deposit 
+        // If I call this trough a multicall, the address will be added at the end of the whole multicall tx, not on each tx
+        // So, one of this tx could have an arbitrary address at the end,  
+        bytes memory payload = abi.encodePacked(request.data, request.from); // reqeuest.data = function selector + parameters paired with request.from address 
         uint256 forwardGas = request.gas;
         assembly {
+            // add(payload, 0x20) -> pointer + 32 bytes , mload(payload) -> gets the first 32 bytes of the data on the pointer (AKA data length)
             success := call(forwardGas, target, value, add(payload, 0x20), mload(payload), 0, 0) // don't copy returndata
             gasLeft := gas()
         }

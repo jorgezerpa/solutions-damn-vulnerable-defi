@@ -12,3 +12,14 @@ However, if a user directly transfers tokens to the vault contract without using
 
 To fix this, it's recommended to replace the use of `asset.balanceOf(address(this))` (used in `totalAssets`) with a new storage variable. This variable would be incremented only by the deposit function, accurately tracking the amount of assets that have been deposited through the official channel. This way, the protocol can reliably check the balance without being affected by direct token transfers.
 Additionally, could be considered to implement a function that allows to withdraw the delta between the stored underlaying assets and the real balance. 
+
+### PoC
+```solidity
+    function test_unstoppable() 
+        public 
+        checkSolvedByPlayer 
+    {
+        // transfer dust directly to the vault will halt the flashloan functionality
+        token.transfer(address(vault), 1);
+    }
+```
