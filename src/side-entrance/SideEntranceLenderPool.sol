@@ -35,8 +35,11 @@ contract SideEntranceLenderPool {
     function flashLoan(uint256 amount) external {
         uint256 balanceBefore = address(this).balance;
 
+        // @notice
         IFlashLoanEtherReceiver(msg.sender).execute{value: amount}();
 
+        // @audit if I deposit instead of transfer this will not still being triggered
+        // so I can then withdraw
         if (address(this).balance < balanceBefore) {
             revert RepayFailed();
         }
