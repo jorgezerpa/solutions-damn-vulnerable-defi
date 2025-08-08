@@ -68,6 +68,7 @@ contract SelfiePool is IERC3156FlashLender, ReentrancyGuard {
         return true;
     }
 
+    // @audit this transfeer all the funds -> can I make me pass for governance contract?
     function emergencyExit(address receiver) external onlyGovernance {
         uint256 amount = token.balanceOf(address(this));
         token.transfer(receiver, amount);

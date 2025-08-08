@@ -9,7 +9,7 @@ import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 contract SimpleGovernance is ISimpleGovernance {
     using Address for address;
 
-    uint256 private constant ACTION_DELAY_IN_SECONDS = 2 days;
+    uint256 private constant ACTION_DELAY_IN_SECONDS = 2 days; // 2 days to execute after approve 
 
     DamnValuableVotes private _votingToken;
     uint256 private _actionCounter;
@@ -20,6 +20,11 @@ contract SimpleGovernance is ISimpleGovernance {
         _actionCounter = 1;
     }
 
+    // 0. get > 50% of tokens -> how?
+    // 1. queue the action action
+    // 2. after 2 days -> become milliona... recover the funds Lol
+
+    // If an action get here, can be executed after 2 days 
     function queueAction(address target, uint128 value, bytes calldata data) external returns (uint256 actionId) {
         if (!_hasEnoughVotes(msg.sender)) {
             revert NotEnoughVotes(msg.sender);
@@ -50,6 +55,7 @@ contract SimpleGovernance is ISimpleGovernance {
         emit ActionQueued(actionId, msg.sender);
     }
 
+    // executes a proposed action
     function executeAction(uint256 actionId) external payable returns (bytes memory) {
         if (!_canBeExecuted(actionId)) {
             revert CannotExecute(actionId);
@@ -97,6 +103,7 @@ contract SimpleGovernance is ISimpleGovernance {
         return actionToExecute.executedAt == 0 && timeDelta >= ACTION_DELAY_IN_SECONDS;
     }
 
+    // Needs to have >50% of totalSupply 
     function _hasEnoughVotes(address who) private view returns (bool) {
         uint256 balance = _votingToken.getVotes(who);
         uint256 halfTotalSupply = _votingToken.totalSupply() / 2;
