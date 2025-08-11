@@ -34,6 +34,7 @@ contract PuppetPool is ReentrancyGuard {
             revert NotEnoughCollateral();
         }
 
+        // give back excess
         if (msg.value > depositRequired) {
             unchecked {
                 payable(msg.sender).sendValue(msg.value - depositRequired);
@@ -45,6 +46,7 @@ contract PuppetPool is ReentrancyGuard {
         }
 
         // Fails if the pool doesn't have enough tokens in liquidity
+        // @audit I need to take out the exact amount of tokens holded by the pool 
         if (!token.transfer(recipient, amount)) {
             revert TransferFailed();
         }
@@ -53,11 +55,23 @@ contract PuppetPool is ReentrancyGuard {
     }
 
     function calculateDepositRequired(uint256 amount) public view returns (uint256) {
-        return amount * _computeOraclePrice() * DEPOSIT_FACTOR / 10 ** 18;
+        // receives the amount of tokens I want to get
+        // amount * priceOfEth
+        // 1:1 -> 10 * (1 * 2) -> 2 
+        // 2:1 -> 10 * (2 * 2) -> 4
+        // 1:2 -> 10 * (0.5 * 2) -> 1
+        // 0.1:2 -> 10 * (0.2 * 2) -> 0.4
+        return amount * _computeOraclePrice() * DEPOSIT_FACTOR / 10 ** 18; // fixed point a*b = a*b/denominator
     }
 
+    // @notice return eth/token
+    // 1 eth/token -> 1 token word 1 eth
+    // 5 eth/token -> 1 token word 5 eth
     function _computeOraclePrice() private view returns (uint256) {
         // calculates the price of the token in wei according to Uniswap pair
+        // 1:1 -> 1
+        // 2:1 -> 2
+        // 1:2 -> 0.5
         return uniswapPair.balance * (10 ** 18) / token.balanceOf(uniswapPair);
     }
 }
