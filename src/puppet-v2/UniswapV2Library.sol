@@ -26,7 +26,7 @@ library UniswapV2Library {
                             hex"ff",
                             factory,
                             keccak256(abi.encodePacked(token0, token1)),
-                            hex"96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f" // init code hash
+                            hex"96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f" // init code hash // @audit what is this?
                         )
                     )
                 )
@@ -41,7 +41,9 @@ library UniswapV2Library {
         returns (uint256 reserveA, uint256 reserveB)
     {
         (address token0,) = sortTokens(tokenA, tokenB);
+        // @notice is not using timestamp 
         (uint256 reserve0, uint256 reserve1,) = IUniswapV2Pair(pairFor(factory, tokenA, tokenB)).getReserves();
+        // reset to the original order if it was changedd
         (reserveA, reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
     }
 
@@ -49,6 +51,7 @@ library UniswapV2Library {
     function quote(uint256 amountA, uint256 reserveA, uint256 reserveB) internal pure returns (uint256 amountB) {
         require(amountA > 0, "UniswapV2Library: INSUFFICIENT_AMOUNT");
         require(reserveA > 0 && reserveB > 0, "UniswapV2Library: INSUFFICIENT_LIQUIDITY");
+        // @audit if amountA *  reserveB is less than reserveA this will return 0 due to rounding slippage 
         amountB = amountA * reserveB / reserveA;
     }
 

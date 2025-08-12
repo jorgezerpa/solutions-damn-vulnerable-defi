@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {UniswapV2Library} from "./UniswapV2Library.sol";
+import {Test, console} from "forge-std/Test.sol";
 
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
@@ -30,12 +31,14 @@ contract PuppetV2Pool {
     /**
      * @notice Allows borrowing tokens by first depositing three times their value in WETH
      *         Sender must have approved enough WETH in advance.
-     *         Calculations assume that WETH and borrowed token have same amount of decimals.
+     *         Calculations assume that WETH and borrowed token have same amount of decimals. // 
      */
+    // @audit@PAV can I interact directly with the upool? 
+    // @audit@PAV is this using twap?
+    // @audit@PAV what if I loop swaps/borrows? -> borrow DVT -> swap all for eth -> deposit eth -> now dvt worths more -> swap it all for eth 
     function borrow(uint256 borrowAmount) external {
         // Calculate how much WETH the user must deposit
         uint256 amount = calculateDepositOfWETHRequired(borrowAmount);
-
         // Take the WETH
         _weth.transferFrom(msg.sender, address(this), amount);
 
@@ -53,10 +56,14 @@ contract PuppetV2Pool {
     }
 
     // Fetch the price from Uniswap v2 using the official libraries
-    function _getOracleQuote(uint256 amount) private view returns (uint256) {
+    // @audit V2 uses TWAP but is optional for the caller to use it, is this using it?
+    // I can make a reentrancy -> use the flashloan swap functionality, to call borrow with devaluated price
+    function _getOracleQuote(uint256 amount) public view returns (uint256) {
+        // @audit what returns getReserves?
+        
         (uint256 reservesWETH, uint256 reservesToken) =
             UniswapV2Library.getReserves({factory: _uniswapFactory, tokenA: address(_weth), tokenB: address(_token)});
-
+        // @audit assumes that amount is passed in no fixed decimal form 
         return UniswapV2Library.quote({amountA: amount * 10 ** 18, reserveA: reservesToken, reserveB: reservesWETH});
     }
 }

