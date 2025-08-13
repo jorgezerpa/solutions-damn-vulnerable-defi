@@ -55,6 +55,7 @@ contract FreeRiderNFTMarketplace is ReentrancyGuard {
         }
     }
 
+    // @dev checks approval and register in offers 
     function _offerOne(uint256 tokenId, uint256 price) private {
         DamnValuableNFT _token = token; // gas savings
 
@@ -74,7 +75,7 @@ contract FreeRiderNFTMarketplace is ReentrancyGuard {
 
         assembly {
             // gas savings
-            sstore(0x02, add(sload(0x02), 0x01))
+            sstore(0x02, add(sload(0x02), 0x01)) // @notice this adds to offersCounts (offersCount++)
         }
 
         emit NFTOffered(msg.sender, tokenId, price);
@@ -94,17 +95,18 @@ contract FreeRiderNFTMarketplace is ReentrancyGuard {
             revert TokenNotOffered(tokenId);
         }
 
-        if (msg.value < priceToPay) {
+        if (msg.value < priceToPay) { // @audit msg.value is the same for every looped id
             revert InsufficientPayment();
         }
 
-        --offersCount;
+        --offersCount; 
 
         // transfer from seller to buyer
         DamnValuableNFT _token = token; // cache for gas savings
         _token.safeTransferFrom(_token.ownerOf(tokenId), msg.sender, tokenId);
 
-        // pay seller using cached token
+        // pay seller using cached token // @audit this is not caching the previous NFT owner, it is transfering to the new one (AKA NFT for free)
+        // @audit@notice this is the reported vul mentioned on the readMe
         payable(_token.ownerOf(tokenId)).sendValue(priceToPay);
 
         emit NFTBought(msg.sender, tokenId, priceToPay);

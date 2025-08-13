@@ -13,7 +13,7 @@ contract FreeRiderRecoveryManager is ReentrancyGuard, IERC721Receiver {
     uint256 private immutable bounty;
     address private immutable beneficiary;
     IERC721 private immutable nft;
-    uint256 private received;
+    uint256 public received;
 
     error NotEnoughFunds();
     error CallerNotNFT();
@@ -32,7 +32,7 @@ contract FreeRiderRecoveryManager is ReentrancyGuard, IERC721Receiver {
     }
 
     // Read https://eips.ethereum.org/EIPS/eip-721 for more info on this function
-    function onERC721Received(address, address, uint256 _tokenId, bytes memory _data)
+    function onERC721Received(address /*caller of transferFrom*/, address /*prev owner*/, uint256 _tokenId, bytes memory _data)
         external
         override
         nonReentrant

