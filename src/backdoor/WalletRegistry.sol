@@ -8,6 +8,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Safe} from "safe-smart-account/contracts/Safe.sol";
 import {SafeProxy} from "safe-smart-account/contracts/proxies/SafeProxy.sol";
 import {IProxyCreationCallback} from "safe-smart-account/contracts/proxies/IProxyCreationCallback.sol";
+import {Test, console} from "forge-std/Test.sol";
 
 /**
  * @notice A registry for Safe multisig wallets.
@@ -15,12 +16,12 @@ import {IProxyCreationCallback} from "safe-smart-account/contracts/proxies/IProx
  * @dev The registry has embedded verifications to ensure only legitimate Safe wallets are stored.
  */
 contract WalletRegistry is IProxyCreationCallback, Ownable {
-    uint256 private constant EXPECTED_OWNERS_COUNT = 1;
+    uint256 private constant EXPECTED_OWNERS_COUNT = 1; // @audit not using multiple owners?
     uint256 private constant EXPECTED_THRESHOLD = 1;
     uint256 private constant PAYMENT_AMOUNT = 10e18;
 
-    address public immutable singletonCopy;
-    address public immutable walletFactory;
+    address public immutable singletonCopy; // safe singleton
+    address public immutable walletFactory; // safe proxy factory
     IERC20 public immutable token;
 
     mapping(address => bool) public beneficiaries;
@@ -73,11 +74,11 @@ contract WalletRegistry is IProxyCreationCallback, Ownable {
         address payable walletAddress = payable(proxy);
 
         // Ensure correct factory and copy
-        if (msg.sender != walletFactory) {
+        if (msg.sender != walletFactory) { // should be called from the factory on reateProxyWithCallback function (this is the callback)
             revert CallerNotFactory();
         }
 
-        if (singleton != singletonCopy) {
+        if (singleton != singletonCopy) { // should use the specified safe contract for logic 
             revert FakeSingletonCopy();
         }
 
@@ -88,12 +89,12 @@ contract WalletRegistry is IProxyCreationCallback, Ownable {
 
         // Ensure wallet initialization is the expected
         uint256 threshold = Safe(walletAddress).getThreshold();
-        if (threshold != EXPECTED_THRESHOLD) {
+        if (threshold != EXPECTED_THRESHOLD) { // 1
             revert InvalidThreshold(threshold);
         }
 
         address[] memory owners = Safe(walletAddress).getOwners();
-        if (owners.length != EXPECTED_OWNERS_COUNT) {
+        if (owners.length != EXPECTED_OWNERS_COUNT) { // 1
             revert InvalidOwnersCount(owners.length);
         }
 
@@ -102,12 +103,16 @@ contract WalletRegistry is IProxyCreationCallback, Ownable {
         unchecked {
             walletOwner = owners[0];
         }
+
+        // @audit@PAV
+        // -> deploy a safe wallet with a beneficiary in owners list
+        // -> but on setup function -> add malicious logic -> take funds to recovery address -> how?: moduleManager (allowance) or executor 
         if (!beneficiaries[walletOwner]) {
             revert OwnerIsNotABeneficiary();
         }
 
         address fallbackManager = _getFallbackManager(walletAddress);
-        if (fallbackManager != address(0)) {
+        if (fallbackManager != address(0)) { // no fallback manager @audit try to call a non-existant function to see what happens
             revert InvalidFallbackManager(fallbackManager);
         }
 
