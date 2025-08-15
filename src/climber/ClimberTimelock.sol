@@ -87,7 +87,12 @@ contract ClimberTimelock is ClimberTimelockBase {
 
         bytes32 id = getOperationId(targets, values, dataElements, salt);
 
+        // @PAV selfadministration and not follow CEI --> CROSS-FUNCTION-REENTRANCY!!!!!!!
+        // 1. grant role of proposer to this (I can cause this is an address) -> grantRole(bytes32 role, address account)
+        // 2. Update delay to 0
+        // 3. propose this exact params to avoid the next if to revert 
         for (uint8 i = 0; i < targets.length; ++i) {
+            // cal
             targets[i].functionCallWithValue(dataElements[i], values[i]);
         }
 
