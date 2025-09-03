@@ -4,12 +4,12 @@ pragma solidity =0.8.25;
 
 contract AuthorizerUpgradeable {
     uint256 public needsInit = 1;
-    mapping(address => mapping(address => uint256)) private wards;
+    mapping(address => mapping(address => uint256)) private wards; // ward -> aim -> 1||0
 
     event Rely(address indexed usr, address aim);
 
     constructor() {
-        needsInit = 0; // freeze implementation
+        needsInit = 0; // freeze implementation 
     }
 
     function init(address[] memory _wards, address[] memory _aims) external {
