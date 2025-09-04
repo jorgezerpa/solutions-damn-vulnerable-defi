@@ -39,7 +39,7 @@ contract PuppetV3Pool {
         // Calculate how much WETH the user must deposit
         uint256 depositOfWETHRequired = calculateDepositOfWETHRequired(borrowAmount);
 
-        //TODO: use Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3)
+        //TODO: use Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) // @audit what?
 
         // Pull WETH from caller
         weth.transferFrom(msg.sender, address(this), depositOfWETHRequired);
@@ -54,7 +54,7 @@ contract PuppetV3Pool {
     }
 
     function calculateDepositOfWETHRequired(uint256 amount) public view returns (uint256) {
-        uint256 quote = _getOracleQuote(_toUint128(amount));
+        uint256 quote = _getOracleQuote(_toUint128(amount)); // @audit can I make quote to be 0?
         return quote * DEPOSIT_FACTOR;
     }
 

