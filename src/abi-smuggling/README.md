@@ -7,3 +7,13 @@ The contract has an embedded generic authorization scheme, only allowing known a
 The dev team has received a responsible disclosure saying all funds can be stolen.
 
 Rescue all funds from the vault, transferring them to the designated recovery account.
+
+------------
+- Important functions can be called ONLY from executor 
+- Can't reenter `execute` -> reentrancy guard 
+- Player is allowed to call withdraw
+
+## PAV
+- Find a way to call `sweepFunds`?
+    - 
+

